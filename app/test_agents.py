@@ -1,14 +1,22 @@
 from typing import Annotated
+from typing import Annotated, Literal, Sequence
 from dotenv import load_dotenv
 import os
 
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from langgraph.prebuilt import tools_condition
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
+from langchain import hub
+from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+
+from pydantic import BaseModel, Field
 
 
 load_dotenv()
@@ -64,12 +72,30 @@ db = Chroma.from_documents(
     embedding=hf,
 )
 
+retriever = db.as_retriever()
+
+from langchain.tools.retriever import create_retriever_tool
+
+retriever_tool = create_retriever_tool(
+    retriever,
+    "retrieve_blog_posts",
+    "Search and return information about Lilian Weng blog posts on LLM agents, prompt engineering, and adversarial attacks on LLMs.",
+)
+
+tools = [retriever_tool]
+
 
 class State(TypedDict):
     # messages: Annotated[list, add_messages]
     question: str
     answer: str
     documents: list[Document]
+
+
+def chatbot(state: State):
+    answer = {"messages": [llm.invoke(state["question"])]}
+    state["answer"] = answer
+    return state
 
 
 def retrieve(state: State) -> None:
@@ -87,12 +113,16 @@ def generate(state: State) -> None:
 
 workflow = StateGraph(state_schema=State)
 
+workflow.add_node(node="chatbot", action=chatbot)
 workflow.add_node(node="retrieve", action=retrieve)
 workflow.add_node(node="generate", action=generate)
 
-workflow.add_edge(start_key=START, end_key="retrieve")
-workflow.add_edge(start_key="retrieve", end_key="generate")
-workflow.add_edge(start_key="generate", end_key=END)
+# workflow.add_edge(start_key=START, end_key="retrieve")
+# workflow.add_edge(start_key="retrieve", end_key="generate")
+# workflow.add_edge(start_key="generate", end_key=END)
+
+workflow.add_edge(start_key=START, end_key="chatbot")
+workflow.add_edge(start_key="chatbot", end_key=END)
 
 workflow.compile()
 
