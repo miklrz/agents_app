@@ -19,7 +19,9 @@ dependencies = [
     "langchain-groq (>=0.3.2,<0.4.0)",
     "langchain-community (>=0.3.22,<0.4.0)",
     "hf-xet (>=1.0.5,<2.0.0)",
-    "chromadb (>=1.0.7,<2.0.0)"
+    "chromadb (>=1.0.7,<2.0.0)",
+    "langchain-openai (>=0.3.16,<0.4.0)",
+    "uvicorn (>=0.34.2,<0.35.0)"
 ]
 
 
