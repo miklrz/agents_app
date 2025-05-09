@@ -9,7 +9,6 @@ from app.database.db import db
 
 load_dotenv()
 
-
 llm = setup_groq()
 
 retriever = db.as_retriever()
@@ -58,15 +57,39 @@ def generate(state: State) -> None:
     return {"answer": answer}
 
 
+def route_tools(
+    state: State,
+):
+    pass
+    # if isinstance(state, list):
+    #     ai_message = state[-1]
+    # elif messages := state.get("messages", []):
+    #     ai_message = messages[-1]
+    # else:
+    #     raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    # if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+    #     return "tools"
+    # return END
+
+
 workflow = StateGraph(state_schema=State)
 
-workflow.add_node(node="retrieve", action=retrieve)
-workflow.add_node(node="generate", action=generate)
+# workflow.add_node(node="retrieve", action=retrieve)
+# workflow.add_node(node="generate", action=generate)
+
+workflow.add_node(node="chatbot", action=chatbot)
 workflow.add_node("tools", tool_node)
 
+workflow.add_conditional_edges(
+    "chatbot",
+    route_tools,
+    {"tools": "tools", END: END},
+)
+workflow.add_edge("tools", "chatbot")
+workflow.add_edge(START, "chatbot")
 
-workflow.add_edge(start_key=START, end_key="retrieve")
-workflow.add_edge(start_key="retrieve", end_key="generate")
-workflow.add_edge(start_key="generate", end_key=END)
+# workflow.add_edge(start_key=START, end_key="retrieve")
+# workflow.add_edge(start_key="retrieve", end_key="generate")
+# workflow.add_edge(start_key="generate", end_key=END)
 
 workflow.compile()
