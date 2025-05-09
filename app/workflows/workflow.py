@@ -4,8 +4,8 @@ from app.models.llms import setup_groq, setup_lm_studio
 from app.nodes.BasicToolNode import BasicToolNode
 from app.database.documents import docs
 from app.prompts.prompts import prompt
-from states.state import State
-from database.db import db
+from app.states.state import State
+from app.database.db import db
 
 load_dotenv()
 

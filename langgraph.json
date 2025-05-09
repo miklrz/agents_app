@@ -3,7 +3,7 @@
         "pyproject.toml"
     ],
     "graphs": {
-        "my_agent": "./app/test_agents.py:workflow"
+        "my_agent": "./app/workflows/workflow.py:workflow"
     },
     "env": "./.env"
 }
