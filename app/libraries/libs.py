@@ -19,3 +19,4 @@ from langchain.tools.retriever import create_retriever_tool
 from pydantic import BaseModel, Field
 from langchain_core.documents import Document
 from langchain_tavily import TavilySearch
+from langchain_openai import OpenAIEmbeddings

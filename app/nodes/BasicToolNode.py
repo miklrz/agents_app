@@ -25,4 +25,5 @@ class BasicToolNode:
                     tool_call_id=tool_call["id"],
                 )
             )
-        return {"messages": outputs}
+        messages.extend(outputs)
+        return {"messages": messages}
