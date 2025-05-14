@@ -12,7 +12,7 @@ class BasicToolNode:
         if messages := inputs.get("messages", []):
             message = messages[-1]
         else:
-            raise ValueError("No message found in input")
+            raise ValueError("No message found in input in BasicToolNode")
         outputs = []
         for tool_call in message.tool_calls:
             tool_result = self.tools_by_name[tool_call["name"]].invoke(
@@ -25,5 +25,4 @@ class BasicToolNode:
                     tool_call_id=tool_call["id"],
                 )
             )
-        messages.extend(outputs)
-        return {"messages": messages}
+        return {"messages": outputs}

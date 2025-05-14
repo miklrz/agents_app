@@ -17,7 +17,6 @@ retriever_tool = create_retriever_tool(
     "retrieve_france",
     "Retrieve documents",
 )
-
 # tools = [retriever_tool]
 
 tavily_search_tool = TavilySearch(max_results=2)
@@ -26,19 +25,15 @@ tools = [tavily_search_tool]
 tool_node = BasicToolNode(tools=[tavily_search_tool])
 llm_with_tools = llm.bind_tools(tools)
 
-chain = LLMChain(
-    llm=llm,
-    prompt=prompt,
-)
+chain = prompt | llm
+
+print(llm_with_tools.invoke("Как дела?"))
 
 
 def chatbot(state: State):
-    messages = state.get("messages", [])
-    question = state.get("question")
-    messages.append(HumanMessage(content=question))
-    response = llm_with_tools.invoke(messages)
-    messages.append(response)
-    return {"messages": messages, "answer": response}
+    print(state)
+    messages = llm_with_tools.invoke(state["messages"])
+    return {"messages": messages}
 
 
 def route_tools(state: State):
