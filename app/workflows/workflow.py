@@ -4,52 +4,48 @@ from app.models.llms import setup_groq, setup_lm_studio
 
 from app.database.documents import docs
 from app.prompts.prompts import prompt
-from app.states.state import State
-from app.database.db import db
+from app.nodes.state import State
+
+# from app.database.db import db
 
 # from app.nodes.BasicToolNode import BasicToolNode
 
 load_dotenv()
 
-llm = setup_groq()
+llm = setup_lm_studio()
 
-retriever = db.as_retriever()
-retriever_tool = create_retriever_tool(
-    retriever,
-    "retrieve_france",
-    "Retrieve documents",
-)
+# retriever = db.as_retriever()
+# retriever_tool = create_retriever_tool(
+#     retriever,
+#     "retrieve_france",
+#     "Retrieve documents",
+# )
 # tools = [retriever_tool]
 
 tavily_search_tool = TavilySearch(max_results=2)
-tools = [tavily_search_tool]
 
-# tool_node = BasicToolNode(tools=[tavily_search_tool])
-tool_node = ToolNode(tools=[tavily_search_tool])
+
+@tool
+def human_assistance(query: str) -> str:
+    """Request assistance from a human."""
+    human_response = interrupt({"query": query})
+    return human_response["data"]
+
+
+tools = [tavily_search_tool, human_assistance]
+tool_node = ToolNode(tools=tools)
 llm_with_tools = llm.bind_tools(tools)
 
 chain = prompt | llm
 
-print(llm_with_tools.invoke("Как дела?"))
-
 
 def chatbot(state: State):
-    print(state)
-    messages = llm_with_tools.invoke(state["messages"])
-    return {"messages": messages}
+    message = llm_with_tools.invoke(state["messages"])
+    assert len(message.tool_calls) <= 1
+    return {"messages": message}
 
 
-# def route_tools(state: State):
-#     if isinstance(state, list):
-#         ai_message = state[-1]
-#     elif messages := state.get("messages", []):
-#         ai_message = messages[-1]
-#     else:
-#         raise ValueError(f"No messages found in input state to tool_edge: {state}")
-#     if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
-#         return "tools"
-#     return END
-
+memory = MemorySaver()
 
 workflow = StateGraph(state_schema=State)
 
@@ -59,13 +55,11 @@ workflow.add_node("tools", tool_node)
 workflow.add_conditional_edges(
     "chatbot",
     tools_condition,
-    # route_tools,
-    # {"tools": "tools", END: END},
 )
 workflow.add_edge("tools", "chatbot")
 workflow.add_edge(START, "chatbot")
 
-workflow.compile()
+workflow.compile(checkpointer=memory)
 
 
 # def retrieve(state: State) -> None:
