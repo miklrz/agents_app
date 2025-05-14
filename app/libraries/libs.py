@@ -18,5 +18,6 @@ from langchain.prompts import PromptTemplate
 from langchain.tools.retriever import create_retriever_tool
 from pydantic import BaseModel, Field
 from langchain_core.documents import Document
+from langgraph.prebuilt import ToolNode
 from langchain_tavily import TavilySearch
 from langchain_openai import OpenAIEmbeddings

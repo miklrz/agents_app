@@ -1,11 +1,13 @@
 from app.libraries.libs import *
 
 from app.models.llms import setup_groq, setup_lm_studio
-from app.nodes.BasicToolNode import BasicToolNode
+
 from app.database.documents import docs
 from app.prompts.prompts import prompt
 from app.states.state import State
 from app.database.db import db
+
+# from app.nodes.BasicToolNode import BasicToolNode
 
 load_dotenv()
 
@@ -22,7 +24,8 @@ retriever_tool = create_retriever_tool(
 tavily_search_tool = TavilySearch(max_results=2)
 tools = [tavily_search_tool]
 
-tool_node = BasicToolNode(tools=[tavily_search_tool])
+# tool_node = BasicToolNode(tools=[tavily_search_tool])
+tool_node = ToolNode(tools=[tavily_search_tool])
 llm_with_tools = llm.bind_tools(tools)
 
 chain = prompt | llm
@@ -36,16 +39,16 @@ def chatbot(state: State):
     return {"messages": messages}
 
 
-def route_tools(state: State):
-    if isinstance(state, list):
-        ai_message = state[-1]
-    elif messages := state.get("messages", []):
-        ai_message = messages[-1]
-    else:
-        raise ValueError(f"No messages found in input state to tool_edge: {state}")
-    if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
-        return "tools"
-    return END
+# def route_tools(state: State):
+#     if isinstance(state, list):
+#         ai_message = state[-1]
+#     elif messages := state.get("messages", []):
+#         ai_message = messages[-1]
+#     else:
+#         raise ValueError(f"No messages found in input state to tool_edge: {state}")
+#     if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
+#         return "tools"
+#     return END
 
 
 workflow = StateGraph(state_schema=State)
@@ -55,8 +58,9 @@ workflow.add_node("tools", tool_node)
 
 workflow.add_conditional_edges(
     "chatbot",
-    route_tools,
-    {"tools": "tools", END: END},
+    tools_condition,
+    # route_tools,
+    # {"tools": "tools", END: END},
 )
 workflow.add_edge("tools", "chatbot")
 workflow.add_edge(START, "chatbot")
