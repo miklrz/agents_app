@@ -6,90 +6,168 @@ from app.database.documents import docs
 from app.prompts.prompts import prompt
 from app.nodes.state import State
 
-# from app.database.db import db
-
-# from app.nodes.BasicToolNode import BasicToolNode
 
 load_dotenv()
 
-llm = setup_lm_studio()
+llm = setup_groq()
 
-# retriever = db.as_retriever()
-# retriever_tool = create_retriever_tool(
-#     retriever,
-#     "retrieve_france",
-#     "Retrieve documents",
-# )
-# tools = [retriever_tool]
 
 tavily_search_tool = TavilySearch(max_results=2)
 
 
-def choose_flight(from_airport: str, to_airport: str):
-    """Choose a flight"""
-    # return f"Successfully booked a flight from {from_airport} to {to_airport}."
-    pass
-
-
-def choose_hotel(hotel_name: str):
+def choose_hotel(city: str):
     """Choose a hotel"""
-    # return f"Successfully booked a stay at {hotel_name}."
-    pass
+    return f"Suggested hotels in city {city}"
 
 
-def choose_restaurant(from_airport: str, to_airport: str):
+def choose_restaurant(city: str):
     """Choose restaurants"""
-    # return f"Successfully booked a flight from {from_airport} to {to_airport}."
-    pass
+    return f"Suggested restaurants in city {city}"
 
 
-def choose_entertainments(from_airport: str, to_airport: str):
-    """Choose entertainments"""
-    # return f"Successfully booked a flight from {from_airport} to {to_airport}."
-    pass
+# from langgraph.prebuilt import create_react_agent
+# from langgraph_swarm import create_swarm, create_handoff_tool
+
+# transfer_to_hotel_assistant = create_handoff_tool(
+#     agent_name="hotel_assistant",
+#     description="Transfer user to the hotel-suggesting assistant.",
+# )
+# transfer_to_restaurant_assistant = create_handoff_tool(
+#     agent_name="restaurant_assistant",
+#     description="Transfer user to the restaurant-suggesting assistant.",
+# )
 
 
-flight_assistant = create_react_agent(
-    model=llm,
-    tools=[choose_flight],
-    prompt="You are a flight choosing assistant",
-    name="flight_assistant",
-)
+# hotel_assistant = create_react_agent(
+#     model=llm,
+#     tools=[choose_hotel, transfer_to_restaurant_assistant],
+#     prompt="You are a hotel choosing assistant",
+#     name="hotel_assistant",
+# )
+# restaurant_assistant = create_react_agent(
+#     model=llm,
+#     tools=[choose_restaurant, transfer_to_hotel_assistant],
+#     prompt="You are a restaurant choosing assistant",
+#     name="restaurant_assistant",
+# )
 
-hotel_assistant = create_react_agent(
-    model=llm,
-    tools=[choose_hotel],
-    prompt="You are a hotel choosing assistant",
-    name="hotel_assistant",
-)
-restaurant_assistant = create_react_agent(
-    model=llm,
-    tools=[choose_restaurant],
-    prompt="You are a restaurant choosing assistant",
-    name="restaurant_assistant",
-)
+# supervisor = create_supervisor(
+#     agents=[
+#         hotel_assistant,
+#         restaurant_assistant,
+#     ],
+#     model=llm,
+#     prompt=(
+#         "You manage a hotel choosing assistant and a"
+#         "restaurant choosing assistant. Assign work to them."
+#     ),
+# ).compile()
 
-entertainments_assistant = create_react_agent(
-    model=llm,
-    tools=[choose_entertainments],
-    prompt="You are a entertainments choosing assistant",
-    name="entertainments_assistant",
-)
+from langgraph.types import Command
+from langchain_core.tools import Tool
 
-supervisor = create_supervisor(
-    agents=[
-        flight_assistant,
-        hotel_assistant,
-        restaurant_assistant,
-        entertainments_assistant,
-    ],
-    model=llm,
-    prompt=(
-        "You manage a flight choosing assistant, "
-        "hotel choosing assistant, restaurant choosing assistant and a"
-        "entertainments choosing assistant. Assign work to them."
+
+def hotel_assistant(state: State):
+    response = hotel_llm.invoke(state["messages"])
+    return Command(
+        goto=response("next_agent"),
+        update={"messages": [response]},
+    )
+
+
+def restaurant_assistant(state: State):
+    response = restaurant_llm.invoke(state["messages"])
+    return Command(
+        goto=response("next_agent"),
+        update={"messages": [response]},
+    )
+
+
+def supervisor_fn(state: State):
+    response = supervisor_llm.invoke(state["messages"])
+    print(response)
+    return Command(goto=response("next_agent"))
+
+
+supervisor_tools = [
+    Tool(
+        name="hotel_assistant",
+        func=hotel_assistant,
+        description="Handles hotel-related queries",
     ),
-).compile()
+    Tool(
+        name="restaurant_assistant",
+        func=restaurant_assistant,
+        description="Handles restaurant-related queries",
+    ),
+]
+
+supervisor_llm = llm.bind_tools(supervisor_tools)
+
+
+restaurant_tools = [
+    Tool(
+        name="tavily_search_tool",
+        func=tavily_search_tool,
+        description="Search for restaurants",
+    ),
+]
+
+restaurant_llm = llm.bind_tools(restaurant_tools)
+
+hotel_tools = [
+    Tool(
+        name="tavily_search_tool",
+        func=tavily_search_tool,
+        description="Search for restaurants",
+    ),
+]
+
+hotel_llm = llm.bind_tools(hotel_tools)
+
+
+supervisor = create_react_agent(supervisor_llm, supervisor_tools)
+
+workflow = StateGraph(state_schema=State)
+
+workflow.add_node(node="supervisor", action=supervisor)
+workflow.add_node(node="hotel_assistant", action=hotel_assistant)
+workflow.add_node(node="restaurant_assistant", action=restaurant_assistant)
+
+workflow.add_edge(START, "hotel_assistant")
+
+# workflow.add_edge("supervisor", "hotel_assistant")
+# workflow.add_edge("supervisor", "restaurant_assistant")
+
+
+def route_supervisor(state):
+    # Предположим, что последнее сообщение — это ответ LLM с tool_call
+    msg = state["messages"][-1]
+    if msg.tool_calls:
+        tool_name = msg.tool_calls[0]["name"]
+        if tool_name == "route_to_hotel":
+            return "hotel_assistant"
+        elif tool_name == "route_to_restaurant":
+            return "restaurant_assistant"
+    return END
+
+
+workflow.add_conditional_edges(
+    "supervisor",
+    route_supervisor,
+    {
+        "hotel_assistant": "hotel_assistant",
+        "restaurant_assistant": "restaurant_assistant",
+        END: END,
+    },
+)
+
+# Циклы — после ассистентов возвращаемся к supervisor
+workflow.add_edge("hotel_assistant", "supervisor")
+workflow.add_edge("restaurant_assistant", "supervisor")
+
+workflow.compile()
+# supervisor = workflow.compile()
 
 
 # @tool
