@@ -68,9 +68,13 @@ from langchain_core.tools import Tool
 
 
 def hotel_assistant(state: State):
-    response = hotel_llm.invoke(state["messages"])
+    print(state, type(state))
+    if isinstance(state, str):
+        location = state
+    prompt = hotel_prompt.format(location=location)
+    response = hotel_llm.invoke(prompt)
     return Command(
-        goto=response("next_agent"),
+        goto="supervisor",
         update={"messages": [response]},
     )
 
@@ -78,15 +82,14 @@ def hotel_assistant(state: State):
 def restaurant_assistant(state: State):
     response = restaurant_llm.invoke(state["messages"])
     return Command(
-        goto=response("next_agent"),
+        goto="supervisor",
         update={"messages": [response]},
     )
 
 
-def supervisor_fn(state: State):
-    response = supervisor_llm.invoke(state["messages"])
-    print(response)
-    return Command(goto=response("next_agent"))
+# def supervisor_fn(state: State):
+#     response = supervisor_llm.invoke(state["messages"])
+#     return Command(goto=response("next_agent"))
 
 
 supervisor_tools = [
@@ -107,7 +110,7 @@ supervisor_llm = llm.bind_tools(supervisor_tools)
 
 restaurant_tools = [
     Tool(
-        name="tavily_search_tool",
+        name="restaurant_tavily_search_tool",
         func=tavily_search_tool,
         description="Search for restaurants",
     ),
@@ -115,15 +118,33 @@ restaurant_tools = [
 
 restaurant_llm = llm.bind_tools(restaurant_tools)
 
+restaurant_prompt = PromptTemplate(
+    input_variables=["location"],
+    template="""
+        User wants to find restaurants in the following place: {location}.
+
+        Suggest restaurant in this this place.
+    """,
+)
+
 hotel_tools = [
     Tool(
-        name="tavily_search_tool",
+        name="hotel_tavily_search_tool",
         func=tavily_search_tool,
-        description="Search for restaurants",
+        description="Search for hotels",
     ),
 ]
 
 hotel_llm = llm.bind_tools(hotel_tools)
+
+hotel_prompt = PromptTemplate(
+    input_variables=["location"],
+    template="""
+        User wants to find hotels in the following place: {location}.
+
+        Suggest hotels in this this place.
+    """,
+)
 
 
 supervisor = create_react_agent(supervisor_llm, supervisor_tools)
@@ -134,15 +155,14 @@ workflow.add_node(node="supervisor", action=supervisor)
 workflow.add_node(node="hotel_assistant", action=hotel_assistant)
 workflow.add_node(node="restaurant_assistant", action=restaurant_assistant)
 
-workflow.add_edge(START, "hotel_assistant")
-
-# workflow.add_edge("supervisor", "hotel_assistant")
-# workflow.add_edge("supervisor", "restaurant_assistant")
+workflow.add_edge(START, "supervisor")
 
 
 def route_supervisor(state):
     # Предположим, что последнее сообщение — это ответ LLM с tool_call
     msg = state["messages"][-1]
+    print(msg)
+    print(msg.tool_calls)
     if msg.tool_calls:
         tool_name = msg.tool_calls[0]["name"]
         if tool_name == "route_to_hotel":
