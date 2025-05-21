@@ -1,7 +1,7 @@
 from app.libraries.libs import *
 from app.models.llms import setup_groq, setup_lm_studio
 from app.nodes.state import State
-from app.prompts.agentic_prompts import HOTEL_PROMPT
+from app.prompts.agentic_prompts import HOTEL_PROMPT, RESTAURANT_PROMPT
 
 
 load_dotenv()
@@ -19,7 +19,10 @@ def hotel_assistant(state: State):
 
 
 def restaurant_assistant(state: State):
-    pass
+    question = state["messages"][-1]
+    prompt = RESTAURANT_PROMPT.format(question=question)
+    response = llm.invoke(prompt)
+    return {"restaurant": response}
 
 
 workflow = StateGraph(state_schema=State)
