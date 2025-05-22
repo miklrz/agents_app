@@ -31,6 +31,7 @@ workflow.add_node(node="hotel_assistant", action=hotel_assistant)
 workflow.add_node(node="restaurant_assistant", action=restaurant_assistant)
 
 workflow.add_edge(START, "hotel_assistant")
+workflow.add_edge("hotel_assistant", "restaurant_assistant")
 workflow.add_edge("restaurant_assistant", END)
 
 workflow.compile()
